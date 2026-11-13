@@ -25,28 +25,32 @@
               name: 'โครงการก่อสร้างรางระบายน้ำ คสล. สาย ก',
               client: 'เทศบาลนครนครราชสีมา',
               budget: 2450000,
-              stage: '6. วางบิล / รอเบิกจ่าย',
+              stage: '3. ส่งเทสวัสดุ / รอผลแล็บ',
+              testSendDate: '2026-11-01',
+              testResultDate: '',
               agingDays: 18,
-              paymentStatus: 'ยื่นหนังสือทวงถามแล้ว',
-              defectNote: 'แก้ไขความยาวรางระบายน้ำช่วงปลายขาด 60 ซม. เรียบร้อย',
-              finalHandoverDate: '2026-10-15',
+              paymentStatus: 'กำลังดำเนินการหน้างาน',
+              defectNote: 'ส่งตัวอย่างคอนกรีตคสล. รอบที่ 2 รอผลแล็บ',
+              finalHandoverDate: '',
             }
           ];
 
           const [projects, setProjects] = React.useState(() => {
-            const saved = localStorage.getItem('ktm_projects_v2');
+            const saved = localStorage.getItem('ktm_projects_v3');
             return saved ? JSON.parse(saved) : defaultProjects;
           });
 
           React.useEffect(() => {
-            localStorage.setItem('ktm_projects_v2', JSON.stringify(projects));
+            localStorage.setItem('ktm_projects_v3', JSON.stringify(projects));
           }, [projects]);
 
           const emptyForm = {
             name: '',
             client: '',
             budget: '',
-            stage: '1. เตรียมการ / เข้าหน้างาน',
+            stage: '1. เตรียมการ / ออกหนังสือเข้าหน้างาน',
+            testSendDate: '',
+            testResultDate: '',
             paymentStatus: 'กำลังดำเนินการหน้างาน',
             agingDays: 0,
             defectNote: '-',
@@ -67,7 +71,9 @@
               name: proj.name,
               client: proj.client,
               budget: proj.budget,
-              stage: proj.stage || '1. เตรียมการ / เข้าหน้างาน',
+              stage: proj.stage || '1. เตรียมการ / ออกหนังสือเข้าหน้างาน',
+              testSendDate: proj.testSendDate || '',
+              testResultDate: proj.testResultDate || '',
               paymentStatus: proj.paymentStatus,
               agingDays: proj.agingDays,
               defectNote: proj.defectNote,
@@ -86,6 +92,8 @@
               client: formData.client,
               budget: Number(formData.budget) || 0,
               stage: formData.stage,
+              testSendDate: formData.testSendDate,
+              testResultDate: formData.testResultDate,
               agingDays: Number(formData.agingDays) || 0,
               paymentStatus: formData.paymentStatus,
               defectNote: formData.defectNote || '-',
@@ -109,6 +117,14 @@
             }
           };
 
+          const calculateDaysPassed = (dateStr) => {
+            if (!dateStr) return null;
+            const target = new Date(dateStr);
+            const today = new Date();
+            const diffTime = today - target;
+            return Math.floor(diffTime / (1000 * 60 * 60 * 24));
+          };
+
           const calculateDeadlines = (handoverDateStr) => {
             if (!handoverDateStr) return { kFactorDeadline: '-', warrantyDeadline: '-', daysLeftK: null };
             const handoverDate = new Date(handoverDateStr);
@@ -130,7 +146,7 @@
               <header className="bg-slate-800 border border-slate-700 rounded-2xl p-4 shadow-xl flex flex-col sm:flex-row justify-between items-center gap-3">
                 <div>
                   <h1 className="text-xl font-bold text-amber-400">🏗️ KTM Construction Tracker</h1>
-                  <p className="text-xs text-slate-400">ระบบบริหารจัดการโครงการก่อสร้างภาครัฐ</p>
+                  <p className="text-xs text-slate-400">ระบบติดตามโครงการและนับวันทุกขั้นตอนแบบเรียลไทม์</p>
                 </div>
                 <select 
                   className="bg-slate-900 text-amber-300 text-sm p-2 rounded-lg border border-slate-700"
@@ -150,8 +166,9 @@
 
               <div className="flex justify-between items-center border-b border-slate-800 pb-3 flex-wrap gap-2">
                 <div className="flex gap-2 overflow-x-auto">
-                  <button onClick={() => setActiveTab('projects')} className={`px-4 py-2 rounded-xl text-sm font-semibold whitespace-nowrap ${activeTab === 'projects' ? 'bg-amber-500 text-slate-950' : 'bg-slate-800 text-slate-300'}`}>📋 โครงการ ({projects.length})</button>
-                  <button onClick={() => setActiveTab('financial')} className={`px-4 py-2 rounded-xl text-sm font-semibold whitespace-nowrap ${activeTab === 'financial' ? 'bg-amber-500 text-slate-950' : 'bg-slate-800 text-slate-300'}`}>💰 ค่างวด</button>
+                  <button onClick={() => setActiveTab('projects')} className={`px-4 py-2 rounded-xl text-sm font-semibold whitespace-nowrap ${activeTab === 'projects' ? 'bg-amber-500 text-slate-950' : 'bg-slate-800 text-slate-300'}`}>📋 โครงการทั้งหมด ({projects.length})</button>
+                  <button onClick={() => setActiveTab('testing')} className={`px-4 py-2 rounded-xl text-sm font-semibold whitespace-nowrap ${activeTab === 'testing' ? 'bg-amber-500 text-slate-950' : 'bg-slate-800 text-slate-300'}`}>🧪 ติดตามส่งเทส & ผลแล็บ</button>
+                  <button onClick={() => setActiveTab('financial')} className={`px-4 py-2 rounded-xl text-sm font-semibold whitespace-nowrap ${activeTab === 'financial' ? 'bg-amber-500 text-slate-950' : 'bg-slate-800 text-slate-300'}`}>💰 การเงิน & Aging</button>
                   <button onClick={() => setActiveTab('compliance')} className={`px-4 py-2 rounded-xl text-sm font-semibold whitespace-nowrap ${activeTab === 'compliance' ? 'bg-amber-500 text-slate-950' : 'bg-slate-800 text-slate-300'}`}>⏳ ค่า K & ค้ำประกัน</button>
                 </div>
                 {currentUser.role !== 'engineer' && (
@@ -165,18 +182,18 @@
                 <form onSubmit={handleSaveProject} className="bg-slate-800 border-2 border-emerald-500/50 rounded-2xl p-5 space-y-4">
                   <div className="flex justify-between items-center">
                     <h3 className="font-bold text-emerald-400 text-lg">
-                      {editingId ? '✏️ แก้ไขข้อมูลโครงการ' : '➕ เพิ่มโครงการก่อสร้างใหม่'}
+                      {editingId ? '✏️ แก้ไขข้อมูลโครงการและติดตามวัน' : '➕ เพิ่มโครงการใหม่ & บันทึกขั้นตอน'}
                     </h3>
                     <button type="button" onClick={() => setShowForm(false)} className="text-slate-400 hover:text-white px-2 py-1">✕ ปิด</button>
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
                     <div>
                       <label className="block text-slate-400 mb-1">ชื่อโครงการ *</label>
-                      <input required type="text" placeholder="เช่น ก่อสร้างถนน คสล. บ้าน..." className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-white" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} />
+                      <input required type="text" placeholder="เช่น ก่อสร้างถนน คสล. ..." className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-white" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} />
                     </div>
                     <div>
                       <label className="block text-slate-400 mb-1">หน่วยงานเจ้าของงาน *</label>
-                      <input required type="text" placeholder="เช่น อบต. / เทศบาล / แขวงทางหลวง..." className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-white" value={formData.client} onChange={e => setFormData({...formData, client: e.target.value})} />
+                      <input required type="text" placeholder="เช่น เทศบาล / อบจ...." className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-white" value={formData.client} onChange={e => setFormData({...formData, client: e.target.value})} />
                     </div>
                     {currentUser.role !== 'engineer' && (
                       <div>
@@ -185,16 +202,24 @@
                       </div>
                     )}
                     <div>
-                      <label className="block text-slate-400 mb-1">ขั้นตอนโครงการ (7 Stages)</label>
+                      <label className="block text-slate-400 mb-1">ขั้นตอนปัจจุบัน (Stage)</label>
                       <select className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-white" value={formData.stage} onChange={e => setFormData({...formData, stage: e.target.value})}>
-                        <option value="1. เตรียมการ / เข้าหน้างาน">1. เตรียมการ / เข้าหน้างาน</option>
-                        <option value="2. กำลังก่อสร้าง">2. กำลังก่อสร้าง</option>
-                        <option value="3. ทดสอบวัสดุ / ผลแล็บ">3. ทดสอบวัสดุ / ผลแล็บ</option>
-                        <option value="4. ส่งมอบงาน / ตรวจรับ">4. ส่งมอบงาน / ตรวจรับ</option>
-                        <option value="5. แก้ไข Defect">5. แก้ไข Defect</option>
-                        <option value="6. วางบิล / รอเบิกจ่าย">6. วางบิล / รอเบิกจ่าย</option>
+                        <option value="1. เตรียมการ / ออกหนังสือเข้าหน้างาน">1. เตรียมการ / ออกหนังสือเข้าหน้างาน</option>
+                        <option value="2. เริ่มงานก่อสร้างหน้างาน">2. เริ่มงานก่อสร้างหน้างาน</option>
+                        <option value="3. ส่งเทสวัสดุ / รอผลแล็บ">3. ส่งเทสวัสดุ / รอผลแล็บ</option>
+                        <option value="4. ผลแล็บออกแล้ว / ดำเนินการต่อ">4. ผลแล็บออกแล้ว / ดำเนินการต่อ</option>
+                        <option value="5. ส่งมอบงาน / ตรวจรับ">5. ส่งมอบงาน / ตรวจรับ</option>
+                        <option value="6. วางบิล / รอเบิกจ่ายงวด">6. วางบิล / รอเบิกจ่ายงวด</option>
                         <option value="7. ปิดโครงการ / ค้ำประกัน">7. ปิดโครงการ / ค้ำประกัน</option>
                       </select>
+                    </div>
+                    <div>
+                      <label className="block text-slate-400 mb-1">📅 วันที่ส่งหนังสือ/ส่งเทสวัสดุ</label>
+                      <input type="date" className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-white" value={formData.testSendDate} onChange={e => setFormData({...formData, testSendDate: e.target.value})} />
+                    </div>
+                    <div>
+                      <label className="block text-slate-400 mb-1">📅 วันที่ได้รับผลแล็บ / ผลเทส</label>
+                      <input type="date" className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-white" value={formData.testResultDate} onChange={e => setFormData({...formData, testResultDate: e.target.value})} />
                     </div>
                     <div>
                       <label className="block text-slate-400 mb-1">สถานะการเงิน / วางบิล</label>
@@ -211,12 +236,12 @@
                       <input type="number" className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-white" value={formData.agingDays} onChange={e => setFormData({...formData, agingDays: e.target.value})} />
                     </div>
                     <div>
-                      <label className="block text-slate-400 mb-1">วันที่ตรวจรับงวดสุดท้าย (คำนวณค่า K / 2 ปี)</label>
+                      <label className="block text-slate-400 mb-1">📅 วันที่ตรวจรับงวดสุดท้าย (คำนวณค่า K / 2 ปี)</label>
                       <input type="date" className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-white" value={formData.finalHandoverDate} onChange={e => setFormData({...formData, finalHandoverDate: e.target.value})} />
                     </div>
                     <div className="md:col-span-2">
-                      <label className="block text-slate-400 mb-1">รายละเอียดหน้างาน / Defect</label>
-                      <input type="text" placeholder="ระบุความคืบหน้าหรือจุดแก้ไข..." className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-white" value={formData.defectNote} onChange={e => setFormData({...formData, defectNote: e.target.value})} />
+                      <label className="block text-slate-400 mb-1">รายละเอียด / หมายเหตุ / Defect</label>
+                      <input type="text" placeholder="ระบุเลขที่หนังสือ หรือรายละเอียดเพิ่มเติม..." className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-white" value={formData.defectNote} onChange={e => setFormData({...formData, defectNote: e.target.value})} />
                     </div>
                   </div>
                   <button type="submit" className="w-full bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold py-2.5 rounded-xl">
@@ -225,39 +250,71 @@
                 </form>
               )}
 
-              {activeTab === 'projects' && projects.map(p => (
-                <div key={p.id} className="bg-slate-800 border border-slate-700 rounded-2xl p-5 space-y-3">
-                  <div className="flex justify-between items-start gap-2 flex-wrap">
-                    <div>
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className="text-xs bg-blue-500/20 text-blue-300 px-2.5 py-0.5 rounded-full">{p.client}</span>
-                        <span className="text-xs bg-amber-500/20 text-amber-300 px-2.5 py-0.5 rounded-full">{p.stage}</span>
+              {activeTab === 'projects' && projects.map(p => {
+                const testDays = calculateDaysPassed(p.testSendDate);
+                return (
+                  <div key={p.id} className="bg-slate-800 border border-slate-700 rounded-2xl p-5 space-y-3">
+                    <div className="flex justify-between items-start gap-2 flex-wrap">
+                      <div>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="text-xs bg-blue-500/20 text-blue-300 px-2.5 py-0.5 rounded-full">{p.client}</span>
+                          <span className="text-xs bg-amber-500/20 text-amber-300 px-2.5 py-0.5 rounded-full">{p.stage}</span>
+                        </div>
+                        <h3 className="text-lg font-bold text-white mt-2">{p.name}</h3>
                       </div>
-                      <h3 className="text-lg font-bold text-white mt-2">{p.name}</h3>
+                      <div className="flex items-center gap-2">
+                        {currentUser.role !== 'engineer' && (
+                          <span className="text-amber-400 font-bold text-sm mr-2">{p.budget.toLocaleString()} บ.</span>
+                        )}
+                        <button onClick={() => openEditForm(p)} className="text-xs text-sky-300 hover:text-sky-200 bg-sky-500/20 px-3 py-1.5 rounded-lg font-semibold">✏️ แก้ไข</button>
+                        {currentUser.role === 'admin' && (
+                          <button onClick={() => handleDeleteProject(p.id)} className="text-xs text-red-400 hover:text-red-300 bg-red-500/10 px-2.5 py-1.5 rounded-lg">ลบ</button>
+                        )}
+                      </div>
                     </div>
-                    <div className="flex items-center gap-2">
-                      {currentUser.role !== 'engineer' && (
-                        <span className="text-amber-400 font-bold text-sm mr-2">{p.budget.toLocaleString()} บ.</span>
-                      )}
-                      <button onClick={() => openEditForm(p)} className="text-xs text-sky-300 hover:text-sky-200 bg-sky-500/20 px-3 py-1.5 rounded-lg font-semibold">✏️ แก้ไข</button>
-                      {currentUser.role === 'admin' && (
-                        <button onClick={() => handleDeleteProject(p.id)} className="text-xs text-red-400 hover:text-red-300 bg-red-500/10 px-2.5 py-1.5 rounded-lg">ลบ</button>
-                      )}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs bg-slate-900/60 p-3 rounded-xl border border-slate-700/50">
+                      <div>🧪 ส่งเทสวัสดุ: <span className="text-white font-semibold">{p.testSendDate || 'ยังไม่ระบุ'}</span> {testDays !== null && !p.testResultDate ? <span className="text-amber-400 font-bold">(ส่งมาแล้ว {testDays} วัน ยังไม่ได้รับผล)</span> : ''}</div>
+                      <div>📋 ได้รับผลแล็บ: <span className="text-white font-semibold">{p.testResultDate || 'รอผลแล็บอยู่'}</span></div>
+                    </div>
+                    <p className="text-sm text-slate-300">🛠️ หมายเหตุ: {p.defectNote}</p>
+                    <p className="text-sm text-red-400 font-bold">⏳ สถานะเงินงวด: {p.paymentStatus} (รอ {p.agingDays} วัน)</p>
+                  </div>
+                );
+              })}
+
+              {activeTab === 'testing' && projects.map(p => {
+                const testDays = calculateDaysPassed(p.testSendDate);
+                return (
+                  <div key={p.id} className="bg-slate-800 border border-slate-700 rounded-2xl p-5 space-y-4">
+                    <div className="flex justify-between items-center">
+                      <h3 className="font-bold text-white">{p.name}</h3>
+                      <button onClick={() => openEditForm(p)} className="text-xs text-sky-300 bg-sky-500/20 px-2.5 py-1 rounded">อัปเดตผลเทส</button>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      <div className="bg-blue-500/10 border border-blue-500/30 p-3 rounded-xl space-y-1">
+                        <span className="text-xs text-blue-300 font-semibold block">📤 วันที่ออกหนังสือ / ส่งเทสวัสดุ</span>
+                        <p className="text-white font-bold">{p.testSendDate || 'ยังไม่ได้ระบุวันส่ง'}</p>
+                        {testDays !== null && (
+                          <p className="text-xs text-amber-300">⏱️ ผ่านมาแล้ว <span className="font-bold text-amber-400 text-sm">{testDays}</span> วัน</p>
+                        )}
+                      </div>
+                      <div className="bg-emerald-500/10 border border-emerald-500/30 p-3 rounded-xl space-y-1">
+                        <span className="text-xs text-emerald-300 font-semibold block">📥 วันที่ได้รับผลแล็บ / ผลตรวจ</span>
+                        <p className="text-white font-bold">{p.testResultDate || '⏳ อยู่ระหว่างรอผลแล็บออก'}</p>
+                      </div>
                     </div>
                   </div>
-                  <p className="text-sm text-slate-300">🛠️ หน้างาน/Defect: {p.defectNote}</p>
-                  <p className="text-sm text-red-400 font-bold">⏳ สถานะเงินงวด: {p.paymentStatus} (รอ {p.agingDays} วัน)</p>
-                </div>
-              ))}
+                );
+              })}
 
               {activeTab === 'financial' && (
                 <div className="bg-slate-800 border border-slate-700 rounded-2xl p-5 space-y-3">
-                  <h3 className="font-bold text-white">สถานะการเบิกจ่ายทั้งหมด</h3>
+                  <h3 className="font-bold text-white">สถานะการเบิกจ่ายและ Aging รายโครงการ</h3>
                   {projects.map(p => (
                     <div key={p.id} className="bg-slate-900 p-3 rounded-xl flex justify-between items-center gap-2">
                       <div>
                         <p className="font-semibold text-sm">{p.name}</p>
-                        <p className="text-xs text-amber-300">{p.paymentStatus} (รอ {p.agingDays} วัน)</p>
+                        <p className="text-xs text-amber-300">{p.paymentStatus} — รอเงินงวดมาแล้ว <span className="font-bold text-red-400">{p.agingDays}</span> วัน</p>
                       </div>
                       <div className="flex items-center gap-3">
                         <span className="font-bold text-amber-400 text-sm">
@@ -279,8 +336,8 @@
                       <button onClick={() => openEditForm(p)} className="text-xs text-sky-300 bg-sky-500/20 px-2.5 py-1 rounded">ใส่วันตรวจรับ</button>
                     </div>
                     <div className="bg-red-500/10 border border-red-500/30 p-3 rounded-xl">
-                      <span className="text-xs text-red-400 block font-semibold">⚠️ กำหนดเขตยื่นขอ "ค่า K" (ภายใน 90 วัน)</span>
-                      <p className="text-white font-bold">{d.kFactorDeadline} {d.daysLeftK !== null ? `(เหลือ ${d.daysLeftK} วัน)` : '(ยังไม่ระบุวันตรวจรับ)'}</p>
+                      <span className="text-xs text-red-400 block font-semibold">⚠️ กำหนดเขตยื่นขอ "ค่า K" (ภายใน 90 วันหลังตรวจรับ)</span>
+                      <p className="text-white font-bold">{d.kFactorDeadline} {d.daysLeftK !== null ? `(เหลือเวลาอีก ${d.daysLeftK} วัน)` : '(ยังไม่ระบุวันตรวจรับงวดสุดท้าย)'}</p>
                     </div>
                     <div className="bg-blue-500/10 border border-blue-500/30 p-3 rounded-xl">
                       <span className="text-xs text-blue-300 block font-semibold">🛡️ ครบกำหนดคืน "ค้ำประกันสัญญา & Retention" (2 ปี)</span>
@@ -296,4 +353,3 @@
     </script>
 </body>
 </html>
-
