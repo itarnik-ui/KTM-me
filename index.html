@@ -20,11 +20,10 @@
           const [editingId, setEditingId] = React.useState(null);
           const [showNotices, setShowNotices] = React.useState(true);
 
-          // จัดการ modal เพิ่มรายการเทสย่อย
           const [showTestModal, setShowTestModal] = React.useState(false);
           const [currentProjForTest, setCurrentProjForTest] = React.useState(null);
           const [testForm, setTestForm] = React.useState({
-            testType: 'เทสลูกปูน (Concrete Cube/Cylinder)',
+            testType: 'เทสลูกปูน',
             sendDate: '',
             resultDate: '',
             specDetail: '',
@@ -43,21 +42,21 @@
               defectNote: 'ส่งตัวอย่างคอนกรีตคสล. รอบที่ 2 รอผลแล็บ',
               finalHandoverDate: '',
               tests: [
-                { id: 101, testType: 'เทสลูกปูน (Concrete Cube/Cylinder)', sendDate: '2026-11-01', resultDate: '', specDetail: 'กำลัง 7 วัน (3 ก้อน)', status: 'รอผลแล็บ' },
-                { id: 102, testType: 'เทสเหล็กเสริมคอนกรีต (Tensile Test)', sendDate: '2026-10-20', resultDate: '2026-10-25', specDetail: 'DB12 มอก. SR24', status: 'ผ่าน/ออกผลแล้ว' }
+                { id: 101, testType: 'เทสลูกปูน', sendDate: '2026-11-01', resultDate: '', specDetail: 'กำลัง 7 วัน (3 ก้อน)', status: 'รอผลแล็บ' },
+                { id: 102, testType: 'เทสเหล็ก', sendDate: '2026-10-20', resultDate: '2026-10-25', specDetail: 'DB12 มอก. SR24', status: 'ผ่าน/ออกผลแล้ว' }
               ]
             }
           ];
 
           const [projects, setProjects] = React.useState(() => {
-            const saved = localStorage.getItem('ktm_projects_v5');
+            const saved = localStorage.getItem('ktm_projects_v6');
             if (saved) return JSON.parse(saved);
-            const oldV4 = localStorage.getItem('ktm_projects_v4');
-            return oldV4 ? JSON.parse(oldV4) : defaultProjects;
+            const oldV5 = localStorage.getItem('ktm_projects_v5');
+            return oldV5 ? JSON.parse(oldV5) : defaultProjects;
           });
 
           React.useEffect(() => {
-            localStorage.setItem('ktm_projects_v5', JSON.stringify(projects));
+            localStorage.setItem('ktm_projects_v6', JSON.stringify(projects));
           }, [projects]);
 
           const emptyForm = {
@@ -129,7 +128,6 @@
             }
           };
 
-          // เพิ่มการทดสอบย่อย (BOQ Testing)
           const handleAddTestItem = (e) => {
             e.preventDefault();
             if (!currentProjForTest || !testForm.sendDate) return;
@@ -151,7 +149,7 @@
             }));
 
             setShowTestModal(false);
-            setTestForm({ testType: 'เทสลูกปูน (Concrete Cube/Cylinder)', sendDate: '', resultDate: '', specDetail: '', status: 'รอผลแล็บ' });
+            setTestForm({ testType: 'เทสลูกปูน', sendDate: '', resultDate: '', specDetail: '', status: 'รอผลแล็บ' });
           };
 
           const handleDeleteTestItem = (projId, testId) => {
@@ -200,11 +198,9 @@
             };
           };
 
-          // ระบบแจ้งเตือน Notice Center รวมเรื่องเทส
           const getNotices = () => {
             const list = [];
             projects.forEach(p => {
-              // เช็คการเทสแต่ละรายการว่าเกิน 7 วันยังไม่มาไหม
               if (p.tests && p.tests.length > 0) {
                 p.tests.forEach(t => {
                   if (t.sendDate && !t.resultDate) {
@@ -223,7 +219,6 @@
                 });
               }
 
-              // Aging เงินงวด
               if (p.paymentStatus !== 'รับเงินงวดเรียบร้อย' && p.agingDays >= 15) {
                 list.push({
                   id: `pay-${p.id}`,
@@ -235,7 +230,6 @@
                 });
               }
 
-              // ค่า K
               if (p.finalHandoverDate) {
                 const d = calculateDeadlines(p.finalHandoverDate);
                 if (d.daysLeftK !== null && d.daysLeftK <= 30) {
@@ -286,7 +280,6 @@
                 </div>
               </header>
 
-              {/* Notice Center */}
               {showNotices && notices.length > 0 && (
                 <div className="bg-slate-800/90 border-2 border-red-500/40 rounded-2xl p-4 space-y-2.5 shadow-lg">
                   <div className="flex justify-between items-center">
@@ -324,7 +317,7 @@
               <div className="flex justify-between items-center border-b border-slate-800 pb-3 flex-wrap gap-2">
                 <div className="flex gap-2 overflow-x-auto">
                   <button onClick={() => setActiveTab('projects')} className={`px-4 py-2 rounded-xl text-sm font-semibold whitespace-nowrap ${activeTab === 'projects' ? 'bg-amber-500 text-slate-950' : 'bg-slate-800 text-slate-300'}`}>📋 โครงการทั้งหมด ({projects.length})</button>
-                  <button onClick={() => setActiveTab('testing')} className={`px-4 py-2 rounded-xl text-sm font-semibold whitespace-nowrap ${activeTab === 'testing' ? 'bg-amber-500 text-slate-950' : 'bg-slate-800 text-slate-300'}`}>🧪 ระบบเทสตาม BOQ</button>
+                  <button onClick={() => setActiveTab('testing')} className={`px-4 py-2 rounded-xl text-sm font-semibold whitespace-nowrap ${activeTab === 'testing' ? 'bg-amber-500 text-slate-950' : 'bg-slate-800 text-slate-300'}`}>🧪 ระบบเทสตามประเภทถนน</button>
                   <button onClick={() => setActiveTab('financial')} className={`px-4 py-2 rounded-xl text-sm font-semibold whitespace-nowrap ${activeTab === 'financial' ? 'bg-amber-500 text-slate-950' : 'bg-slate-800 text-slate-300'}`}>💰 การเงิน & Aging</button>
                   <button onClick={() => setActiveTab('compliance')} className={`px-4 py-2 rounded-xl text-sm font-semibold whitespace-nowrap ${activeTab === 'compliance' ? 'bg-amber-500 text-slate-950' : 'bg-slate-800 text-slate-300'}`}>⏳ ค่า K & ค้ำประกัน</button>
                 </div>
@@ -335,12 +328,12 @@
                 )}
               </div>
 
-              {/* Modal เพิ่มรายการทดสอบย่อยตาม BOQ */}
+              {/* Modal เพิ่มรายการทดสอบตามประเภทถนน */}
               {showTestModal && currentProjForTest && (
                 <div className="fixed inset-0 bg-slate-950/80 flex items-center justify-center p-4 z-50">
                   <form onSubmit={handleAddTestItem} className="bg-slate-800 border-2 border-sky-500 rounded-2xl p-5 space-y-4 max-w-md w-full">
                     <div className="flex justify-between items-center">
-                      <h3 className="font-bold text-sky-400 text-base">🧪 บันทึกส่งเทส (BOQ)</h3>
+                      <h3 className="font-bold text-sky-400 text-base">🧪 บันทึกส่งเทส (ตามประเภทถนน)</h3>
                       <button type="button" onClick={() => setShowTestModal(false)} className="text-slate-400 hover:text-white">✕ ปิด</button>
                     </div>
                     <p className="text-xs text-slate-300">โครงการ: <b className="text-white">{currentProjForTest.name}</b></p>
@@ -348,16 +341,26 @@
                       <div>
                         <label className="block text-slate-400 mb-1">ประเภทการทดสอบ *</label>
                         <select className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-white" value={testForm.testType} onChange={e => setTestForm({...testForm, testType: e.target.value})}>
-                          <option value="เทสลูกปูน (Concrete Cube/Cylinder)">เทสลูกปูน (Concrete Cube/Cylinder)</option>
-                          <option value="เทสเหล็กเสริมคอนกรีต (Tensile/Bend Test)">เทสเหล็กเสริมคอนกรีต (Tensile/Bend Test)</option>
-                          <option value="เทสชั้นพื้นทาง (Soil Aggregate / Subbase)">เทสชั้นพื้นทาง (Soil Aggregate / Subbase)</option>
-                          <option value="เทสผิวทาง Asphaltic Concrete (Density/Core)">เทสผิวทาง Asphaltic Concrete (Density/Core)</option>
-                          <option value="เทสท่อ คสล. / วัสดุอื่นๆ">เทสท่อ คสล. / วัสดุอื่นๆ</option>
+                          <optgroup label="🛣️ ถนนคอนกรีตเสริมเหล็ก">
+                            <option value="เทสชั้นพื้นทาง">เทสชั้นพื้นทาง</option>
+                            <option value="เทสเหล็ก">เทสเหล็ก</option>
+                            <option value="ออกแบบ Mix Design">ออกแบบ Mix Design</option>
+                            <option value="เทสลูกปูน">เทสลูกปูน</option>
+                          </optgroup>
+                          <optgroup label="🛤️ ถนนลาดยาง (Asphalt)">
+                            <option value="เทสชั้นพื้นทาง (ลาดยาง)">เทสชั้นพื้นทาง</option>
+                            <option value="เทส Unconfined">เทส Unconfined</option>
+                            <option value="ออกแบบ Job Mix">ออกแบบ Job Mix</option>
+                            <option value="เทส Marshall & Coring">เทส Marshall & Coring</option>
+                          </optgroup>
+                          <optgroup label="📌 อื่นๆ">
+                            <option value="อื่นๆ / งานอื่นๆ">อื่นๆ / งานอื่นๆ</option>
+                          </optgroup>
                         </select>
                       </div>
                       <div>
-                        <label className="block text-slate-400 mb-1">รายละเอียด / สเปค / Lot (เช่น กำลัง 7 วัน, DB12)</label>
-                        <input type="text" placeholder="ระบุรายละเอียดเพิ่มเติม..." className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-white" value={testForm.specDetail} onChange={e => setTestForm({...testForm, specDetail: e.target.value})} />
+                        <label className="block text-slate-400 mb-1">รายละเอียด / สเปค / Lot (เช่น DB12, กำลัง 7 วัน)</label>
+                        <input type="text" placeholder="ระบุรายละเอียด..." className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-white" value={testForm.specDetail} onChange={e => setTestForm({...testForm, specDetail: e.target.value})} />
                       </div>
                       <div>
                         <label className="block text-slate-400 mb-1">📅 วันที่ส่งหนังสือ / ส่งตัวอย่างแล็บ *</label>
@@ -384,7 +387,7 @@
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
                     <div>
                       <label className="block text-slate-400 mb-1">ชื่อโครงการ *</label>
-                      <input required type="text" placeholder="เช่น ก่อสร้างถนน คสล. ..." className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-white" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} />
+                      <input required type="text" placeholder="เช่น ถนนคอนกรีต หรือ ถนนลาดยาง..." className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-white" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} />
                     </div>
                     <div>
                       <label className="block text-slate-400 mb-1">หน่วยงานเจ้าของงาน *</label>
@@ -401,7 +404,7 @@
                       <select className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-white" value={formData.stage} onChange={e => setFormData({...formData, stage: e.target.value})}>
                         <option value="1. เตรียมการ / ออกหนังสือเข้าหน้างาน">1. เตรียมการ / ออกหนังสือเข้าหน้างาน</option>
                         <option value="2. เริ่มงานก่อสร้างหน้างาน">2. เริ่มงานก่อสร้างหน้างาน</option>
-                        <option value="3. ส่งเทสวัสดุตาม BOQ / รอผลแล็บ">3. ส่งเทสวัสดุตาม BOQ / รอผลแล็บ</option>
+                        <option value="3. ส่งเทสวัสดุ / ออกแบบ Mix Design">3. ส่งเทสวัสดุ / ออกแบบ Mix Design</option>
                         <option value="4. ผลแล็บผ่าน / ดำเนินการต่อ">4. ผลแล็บผ่าน / ดำเนินการต่อ</option>
                         <option value="5. ส่งมอบงาน / ตรวจรับ">5. ส่งมอบงาน / ตรวจรับ</option>
                         <option value="6. วางบิล / รอเบิกจ่ายงวด">6. วางบิล / รอเบิกจ่ายงวด</option>
@@ -437,7 +440,6 @@
                 </form>
               )}
 
-              {/* Tab 1: รายชื่อโครงการทั้งหมด */}
               {activeTab === 'projects' && projects.map(p => (
                 <div key={p.id} className="bg-slate-800 border border-slate-700 rounded-2xl p-5 space-y-3">
                   <div className="flex justify-between items-start gap-2 flex-wrap">
@@ -460,7 +462,7 @@
                   </div>
                   <div className="bg-slate-900/60 p-3 rounded-xl border border-slate-700/50 space-y-2">
                     <div className="flex justify-between items-center text-xs">
-                      <span className="text-slate-300 font-bold">🧪 รายการส่งเทสวัสดุตาม BOQ ({p.tests ? p.tests.length : 0} รายการ)</span>
+                      <span className="text-slate-300 font-bold">🧪 รายการส่งเทส ({p.tests ? p.tests.length : 0} รายการ)</span>
                       <button onClick={() => { setCurrentProjForTest(p); setShowTestModal(true); }} className="text-sky-400 hover:text-sky-300 font-bold">+ เพิ่มส่งเทส</button>
                     </div>
                     {p.tests && p.tests.length > 0 ? (
@@ -488,7 +490,6 @@
                 </div>
               ))}
 
-              {/* Tab 2: ระบบเทสตาม BOQ แบบเจาะลึก */}
               {activeTab === 'testing' && projects.map(p => (
                 <div key={p.id} className="bg-slate-800 border border-slate-700 rounded-2xl p-5 space-y-4">
                   <div className="flex justify-between items-center flex-wrap gap-2">
@@ -497,7 +498,7 @@
                       <h3 className="text-lg font-bold text-white mt-1">{p.name}</h3>
                     </div>
                     <button onClick={() => { setCurrentProjForTest(p); setShowTestModal(true); }} className="bg-sky-500 hover:bg-sky-400 text-slate-950 font-bold text-xs px-3 py-2 rounded-xl">
-                      + บันทึกส่งเทส (เหล็ก/ปูน/พื้นทาง/ผิวทาง)
+                      + บันทึกส่งเทส (คอนกรีต / ลาดยาง)
                     </button>
                   </div>
 
@@ -538,7 +539,6 @@
                 </div>
               ))}
 
-              {/* Tab 3: การเงิน & Aging */}
               {activeTab === 'financial' && (
                 <div className="bg-slate-800 border border-slate-700 rounded-2xl p-5 space-y-3">
                   <h3 className="font-bold text-white">สถานะการเบิกจ่ายและ Aging รายโครงการ</h3>
@@ -559,7 +559,6 @@
                 </div>
               )}
 
-              {/* Tab 4: ค่า K & ค้ำประกัน */}
               {activeTab === 'compliance' && projects.map(p => {
                 const d = calculateDeadlines(p.finalHandoverDate);
                 return (
