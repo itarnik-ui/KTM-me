@@ -260,3 +260,565 @@
               curingDays: testForm.curingDays,
               asphaltTemp: testForm.asphaltTemp,
               marshallStability: testForm.marshallStability,
+              status: testForm.resultDate ? 'ผ่าน/ออกผลแล้ว' : 'รอผลแล็บ'
+            };
+
+            let updatedProject = null;
+            setProjects(prev => prev.map(p => {
+              if (p.id === currentProjForTest.id) {
+                updatedProject = { ...p, tests: [...(p.tests || []), newTest] };
+                return updatedProject;
+              }
+              return p;
+            }));
+
+            if (updatedProject) {
+              const { error } = await supabaseClient
+                .from('projects')
+                .upsert(toDbRow(updatedProject), { onConflict: 'id' });
+              if (error) {
+                alert('บันทึกผลเทสขึ้น Cloud ไม่สำเร็จ: ' + error.message);
+              }
+            }
+
+            setShowTestModal(false);
+            setTestForm({
+              testType: 'เทสลูกปูน',
+              sendDate: '',
+              resultDate: '',
+              specDetail: '',
+              fieldDensityResult: '',
+              slumpResult: '',
+              curingDays: '28',
+              asphaltTemp: '',
+              marshallStability: '',
+              status: 'รอผลแล็บ'
+            });
+          };
+
+          const handleDeleteTestItem = async (projId, testId) => {
+            if (!confirm('ลบรายการทดสอบนี้?')) return;
+
+            let updatedProject = null;
+            setProjects(prev => prev.map(p => {
+              if (p.id === projId) {
+                updatedProject = { ...p, tests: (p.tests || []).filter(t => t.id !== testId) };
+                return updatedProject;
+              }
+              return p;
+            }));
+
+            if (updatedProject) {
+              const { error } = await supabaseClient
+                .from('projects')
+                .upsert(toDbRow(updatedProject), { onConflict: 'id' });
+              if (error) {
+                alert('อัปเดตการลบผลเทสไม่สำเร็จ: ' + error.message);
+              }
+            }
+          };
+
+          const calculateDaysPassed = (dateStr) => {
+            if (!dateStr) return null;
+            const target = new Date(dateStr);
+            target.setHours(0, 0, 0, 0);
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            const diffTime = today - target;
+            return Math.floor(diffTime / (1000 * 60 * 60 * 24));
+          };
+
+          const calculateDeadlines = (handoverDateStr) => {
+            if (!handoverDateStr) return { kFactorDeadline: '-', warrantyDeadline: '-', daysLeftK: null, daysLeftWarranty: null };
+            const handoverDate = new Date(handoverDateStr);
+            handoverDate.setHours(0, 0, 0, 0);
+
+            const kDate = new Date(handoverDate);
+            kDate.setDate(kDate.getDate() + 90);
+
+            const warrantyDate = new Date(handoverDate);
+            warrantyDate.setFullYear(warrantyDate.getFullYear() + 2);
+
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+
+            const daysLeftK = Math.ceil((kDate - today) / (1000 * 60 * 60 * 24));
+            const daysLeftWarranty = Math.ceil((warrantyDate - today) / (1000 * 60 * 60 * 24));
+
+            return {
+              kFactorDeadline: kDate.toLocaleDateString('th-TH', { year: 'numeric', month: 'short', day: 'numeric' }),
+              warrantyDeadline: warrantyDate.toLocaleDateString('th-TH', { year: 'numeric', month: 'short', day: 'numeric' }),
+              daysLeftK,
+              daysLeftWarranty
+            };
+          };
+
+          const getNotices = () => {
+            const list = [];
+            projects.forEach(p => {
+              if (p.tests && p.tests.length > 0) {
+                p.tests.forEach(t => {
+                  if (t.sendDate && !t.resultDate) {
+                    const days = calculateDaysPassed(t.sendDate);
+                    if (days >= 7) {
+                      list.push({
+                        id: `test-${p.id}-${t.id}`,
+                        level: days >= 14 ? 'urgent' : 'warning',
+                        category: '🧪 ติดตามผลแล็บ',
+                        project: p.name,
+                        message: `รายการ "${t.testType}" (${t.specDetail}) ส่งมาแล้ว ${days} วัน ยังไม่ได้รับผล`,
+                        projObj: p
+                      });
+                    }
+                  }
+                });
+              }
+
+              if (p.paymentStatus !== 'รับเงินงวดเรียบร้อย' && p.agingDays >= 15) {
+                list.push({
+                  id: `pay-${p.id}`,
+                  level: p.agingDays >= 30 ? 'urgent' : 'warning',
+                  category: '💰 ติดตามเงินงวด',
+                  project: p.name,
+                  message: `สถานะ "${p.paymentStatus}" รอเงินมาแล้ว ${p.agingDays} วัน`,
+                  projObj: p
+                });
+              }
+
+              if (p.finalHandoverDate) {
+                const d = calculateDeadlines(p.finalHandoverDate);
+                if (d.daysLeftK !== null && d.daysLeftK <= 30) {
+                  list.push({
+                    id: `k-${p.id}`,
+                    level: d.daysLeftK <= 15 ? 'urgent' : 'warning',
+                    category: '⚠️ เดดไลน์ค่า K',
+                    project: p.name,
+                    message: d.daysLeftK < 0 ? `เลยกำหนดยื่นขอค่า K มา ${Math.abs(d.daysLeftK)} วัน!` : `เหลือเวลาอีก ${d.daysLeftK} วัน ครบกำหนด 90 วัน`,
+                    projObj: p
+                  });
+                }
+              }
+            });
+            return list;
+          };
+
+          const notices = getNotices();
+
+          const renderSpecificParams = () => {
+            const type = testForm.testType;
+            if (type === 'เทสชั้นพื้นทาง' || type === 'เทสชั้นพื้นทาง (ลาดยาง)') {
+              return (
+                <div className="p-3 bg-slate-900/80 rounded-xl border border-slate-700 space-y-2">
+                  <span className="text-xs font-bold text-amber-400">📊 ผลทดสอบงานดิน / ชั้นพื้นทาง</span>
+                  <div>
+                    <label className="block text-slate-400 text-xs mb-1">ผลทดสอบความแน่น (Field Density - % Compaction)</label>
+                    <input type="text" placeholder="เช่น 98.5%" className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2 text-white text-sm" value={testForm.fieldDensityResult} onChange={e => setTestForm({...testForm, fieldDensityResult: e.target.value})} />
+                  </div>
+                </div>
+              );
+            } else if (type === 'เทสลูกปูน') {
+              return (
+                <div className="p-3 bg-slate-900/80 rounded-xl border border-slate-700 space-y-2">
+                  <span className="text-xs font-bold text-amber-400">📊 ผลทดสอบงานคอนกรีต</span>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="block text-slate-400 text-xs mb-1">ค่า Slump Test (ซม.)</label>
+                      <input type="text" placeholder="เช่น 7.5 ± 2.5" className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2 text-white text-sm" value={testForm.slumpResult} onChange={e => setTestForm({...testForm, slumpResult: e.target.value})} />
+                    </div>
+                    <div>
+                      <label className="block text-slate-400 text-xs mb-1">ระยะเวลาบ่ม (Curing Days)</label>
+                      <select className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2 text-white text-sm" value={testForm.curingDays} onChange={e => setTestForm({...testForm, curingDays: e.target.value})}>
+                        <option value="7">7 วัน</option>
+                        <option value="14">14 วัน</option>
+                        <option value="28">28 วัน (Standard)</option>
+                      </select>
+                    </div>
+                  </div>
+                </div>
+              );
+            } else if (type === 'เทส Marshall & Coring') {
+              return (
+                <div className="p-3 bg-slate-900/80 rounded-xl border border-slate-700 space-y-2">
+                  <span className="text-xs font-bold text-amber-400">📊 ผลทดสอบแอสฟัลต์ (Asphalt)</span>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="block text-slate-400 text-xs mb-1">อุณหภูมิหน้างาน (°C)</label>
+                      <input type="text" placeholder="เช่น 140°C" className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2 text-white text-sm" value={testForm.asphaltTemp} onChange={e => setTestForm({...testForm, asphaltTemp: e.target.value})} />
+                    </div>
+                    <div>
+                      <label className="block text-slate-400 text-xs mb-1">ค่าความเสถียร (Marshall Stability - lbs)</label>
+                      <input type="text" placeholder="เช่น 2500 lbs" className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2 text-white text-sm" value={testForm.marshallStability} onChange={e => setTestForm({...testForm, marshallStability: e.target.value})} />
+                    </div>
+                  </div>
+                </div>
+              );
+            }
+            return null;
+          };
+
+          return (
+            <div className="max-w-4xl mx-auto space-y-5 pb-12">
+              <header className="bg-slate-800 border border-slate-700 rounded-2xl p-4 shadow-xl flex flex-col sm:flex-row justify-between items-center gap-3">
+                <div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h1 className="text-xl font-bold text-amber-400">🏗️ KTM Construction Tracker</h1>
+                    <span className="text-xs bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 px-2.5 py-0.5 rounded-full">
+                      ● {syncStatus}
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-400 mt-0.5">ระบบติดตามโครงการ และบันทึกผลทดสอบวัสดุเฉพาะทาง (Real-time)</p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setShowNotices(!showNotices)}
+                    className={`relative px-3 py-2 rounded-lg text-sm font-bold border ${notices.length > 0 ? 'bg-red-500/20 border-red-500/50 text-red-300' : 'bg-slate-900 border-slate-700 text-slate-400'}`}
+                  >
+                    🔔 Notice ({notices.length})
+                  </button>
+                  <select
+                    className="bg-slate-900 text-amber-300 text-sm p-2 rounded-lg border border-slate-700"
+                    value={currentUser.role}
+                    onChange={(e) => {
+                      const r = e.target.value;
+                      if (r === 'admin') setCurrentUser({ name: 'คุณเม (Admin)', role: 'admin' });
+                      else if (r === 'engineer') setCurrentUser({ name: 'วิศวกรสนาม', role: 'engineer' });
+                      else setCurrentUser({ name: 'ฝ่ายบัญชี/เอกสาร', role: 'office' });
+                    }}
+                  >
+                    <option value="admin">👑 คุณเม (Admin / MD)</option>
+                    <option value="engineer">👷‍♂️ วิศวกรสนาม</option>
+                    <option value="office">📊 ฝ่ายบัญชี/เอกสาร</option>
+                  </select>
+                </div>
+              </header>
+
+              {showNotices && notices.length > 0 && (
+                <div className="bg-slate-800/90 border-2 border-red-500/40 rounded-2xl p-4 space-y-2.5 shadow-lg">
+                  <div className="flex justify-between items-center">
+                    <h2 className="text-sm font-bold text-red-400 flex items-center gap-2">
+                      🚨 รายการแจ้งเตือนที่ต้องติดตาม ({notices.length} รายการ)
+                    </h2>
+                    <button onClick={() => setShowNotices(false)} className="text-xs text-slate-400 hover:text-white">ซ่อนแจ้งเตือน</button>
+                  </div>
+                  <div className="space-y-2">
+                    {notices.map(n => (
+                      <div key={n.id} className={`p-3 rounded-xl border flex flex-col sm:flex-row sm:items-center justify-between gap-2 ${n.level === 'urgent' ? 'bg-red-500/15 border-red-500/40' : 'bg-amber-500/15 border-amber-500/40'}`}>
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <span className={`text-xs font-bold px-2 py-0.5 rounded ${n.level === 'urgent' ? 'bg-red-500 text-white' : 'bg-amber-500 text-slate-950'}`}>
+                              {n.category}
+                            </span>
+                            <span className="text-xs font-bold text-white">{n.project}</span>
+                          </div>
+                          <p className={`text-xs mt-1 font-medium ${n.level === 'urgent' ? 'text-red-200' : 'text-amber-200'}`}>
+                            {n.message}
+                          </p>
+                        </div>
+                        <button
+                          onClick={() => openEditForm(n.projObj)}
+                          className="self-start sm:self-center text-xs bg-slate-900 hover:bg-slate-700 text-white px-3 py-1.5 rounded-lg border border-slate-600 whitespace-nowrap"
+                        >
+                          จัดการโครงการ
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <div className="flex justify-between items-center border-b border-slate-800 pb-3 flex-wrap gap-2">
+                <div className="flex gap-2 overflow-x-auto">
+                  <button onClick={() => setActiveTab('projects')} className={`px-4 py-2 rounded-xl text-sm font-semibold whitespace-nowrap ${activeTab === 'projects' ? 'bg-amber-500 text-slate-950' : 'bg-slate-800 text-slate-300'}`}>📋 โครงการทั้งหมด ({projects.length})</button>
+                  <button onClick={() => setActiveTab('testing')} className={`px-4 py-2 rounded-xl text-sm font-semibold whitespace-nowrap ${activeTab === 'testing' ? 'bg-amber-500 text-slate-950' : 'bg-slate-800 text-slate-300'}`}>🧪 บันทึกผลทดสอบ (Parameter ควบคุม)</button>
+                  <button onClick={() => setActiveTab('financial')} className={`px-4 py-2 rounded-xl text-sm font-semibold whitespace-nowrap ${activeTab === 'financial' ? 'bg-amber-500 text-slate-950' : 'bg-slate-800 text-slate-300'}`}>💰 การเงิน & Aging</button>
+                  <button onClick={() => setActiveTab('compliance')} className={`px-4 py-2 rounded-xl text-sm font-semibold whitespace-nowrap ${activeTab === 'compliance' ? 'bg-amber-500 text-slate-950' : 'bg-slate-800 text-slate-300'}`}>⏳ ค่า K & ค้ำประกัน</button>
+                </div>
+                {currentUser.role !== 'engineer' && (
+                  <button onClick={openAddForm} className="bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold px-4 py-2 rounded-xl text-sm shadow">
+                    + เพิ่มโครงการใหม่
+                  </button>
+                )}
+              </div>
+
+              {showTestModal && currentProjForTest && (
+                <div className="fixed inset-0 bg-slate-950/80 flex items-center justify-center p-4 z-50 overflow-y-auto">
+                  <form onSubmit={handleAddTestItem} className="bg-slate-800 border-2 border-sky-500 rounded-2xl p-5 space-y-4 max-w-lg w-full my-8">
+                    <div className="flex justify-between items-center">
+                      <h3 className="font-bold text-sky-400 text-base">🧪 บันทึกส่งทดสอบวัสดุ (QC Control)</h3>
+                      <button type="button" onClick={() => setShowTestModal(false)} className="text-slate-400 hover:text-white">✕ ปิด</button>
+                    </div>
+                    <p className="text-xs text-slate-300">โครงการ: <b className="text-white">{currentProjForTest.name}</b></p>
+                    <div className="space-y-4 text-sm">
+                      <div>
+                        <label className="block text-slate-400 mb-1">ประเภทการทดสอบ *</label>
+                        <select className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-white" value={testForm.testType} onChange={e => setTestForm({...testForm, testType: e.target.value})}>
+                          <optgroup label="🛣️ ถนนคอนกรีตเสริมเหล็ก">
+                            <option value="เทสชั้นพื้นทาง">เทสชั้นพื้นทาง</option>
+                            <option value="เทสเหล็ก">เทสเหล็ก</option>
+                            <option value="ออกแบบ Mix Design">ออกแบบ Mix Design</option>
+                            <option value="เทสลูกปูน">เทสลูกปูน</option>
+                          </optgroup>
+                          <optgroup label="🛤️ ถนนลาดยาง (Asphalt)">
+                            <option value="เทสชั้นพื้นทาง (ลาดยาง)">เทสชั้นพื้นทาง</option>
+                            <option value="เทส Unconfined">เทส Unconfined</option>
+                            <option value="ออกแบบ Job Mix">ออกแบบ Job Mix</option>
+                            <option value="เทส Marshall & Coring">เทส Marshall & Coring</option>
+                          </optgroup>
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="block text-slate-400 mb-1">ตำแหน่ง / Lot งาน / รายละเอียด</label>
+                        <input type="text" placeholder="เช่น Sta. 0+000 - 0+500, รถผสมคันที่..." className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-white text-sm" value={testForm.specDetail} onChange={e => setTestForm({...testForm, specDetail: e.target.value})} />
+                      </div>
+
+                      {renderSpecificParams()}
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 border-t border-slate-700">
+                        <div>
+                          <label className="block text-slate-400 text-xs mb-1">📅 วันที่ส่งตัวอย่างทดสอบ *</label>
+                          <input required type="date" className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-white text-sm" value={testForm.sendDate} onChange={e => setTestForm({...testForm, sendDate: e.target.value})} />
+                        </div>
+                        <div>
+                          <label className="block text-slate-400 text-xs mb-1">📅 วันที่ได้รับผลแล็บ</label>
+                          <input type="date" className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-white text-sm" value={testForm.resultDate} onChange={e => setTestForm({...testForm, resultDate: e.target.value})} />
+                        </div>
+                      </div>
+                    </div>
+                    <button type="submit" className="w-full bg-sky-500 hover:bg-sky-400 text-slate-950 font-bold py-2.5 rounded-xl text-sm">บันทึกผลควบคุมคุณภาพ</button>
+                  </form>
+                </div>
+              )}
+
+              {showForm && (
+                <form onSubmit={handleSaveProject} className="bg-slate-800 border-2 border-emerald-500/50 rounded-2xl p-5 space-y-4">
+                  <div className="flex justify-between items-center">
+                    <h3 className="font-bold text-emerald-400 text-lg">
+                      {editingId ? '✏️ แก้ไขข้อมูลโครงการ' : '➕ เพิ่มโครงการใหม่'}
+                    </h3>
+                    <button type="button" onClick={() => setShowForm(false)} className="text-slate-400 hover:text-white px-2 py-1">✕ ปิด</button>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
+                    <div>
+                      <label className="block text-slate-400 mb-1">ชื่อโครงการ *</label>
+                      <input required type="text" placeholder="เช่น ถนนคอนกรีต หรือ ถนนลาดยาง..." className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-white" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} />
+                    </div>
+                    <div>
+                      <label className="block text-slate-400 mb-1">หน่วยงานเจ้าของงาน *</label>
+                      <input required type="text" placeholder="เช่น เทศบาล / อบจ...." className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-white" value={formData.client} onChange={e => setFormData({...formData, client: e.target.value})} />
+                    </div>
+                    {currentUser.role !== 'engineer' && (
+                      <div>
+                        <label className="block text-slate-400 mb-1">มูลค่าสัญญา (บาท)</label>
+                        <input type="number" placeholder="เช่น 3500000" className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-white" value={formData.budget} onChange={e => setFormData({...formData, budget: e.target.value})} />
+                      </div>
+                    )}
+                    <div>
+                      <label className="block text-slate-400 mb-1">ขั้นตอนปัจจุบัน (Stage)</label>
+                      <select className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-white" value={formData.stage} onChange={e => setFormData({...formData, stage: e.target.value})}>
+                        <option value="1. เตรียมการ / ออกหนังสือเข้าหน้างาน">1. เตรียมการ / ออกหนังสือเข้าหน้างาน</option>
+                        <option value="2. เริ่มงานก่อสร้างหน้างาน">2. เริ่มงานก่อสร้างหน้างาน</option>
+                        <option value="3. ส่งเทสวัสดุ / ออกแบบ Mix Design">3. ส่งเทสวัสดุ / ออกแบบ Mix Design</option>
+                        <option value="4. ผลแล็บผ่าน / ดำเนินการต่อ">4. ผลแล็บผ่าน / ดำเนินการต่อ</option>
+                        <option value="5. ส่งมอบงาน / ตรวจรับ">5. ส่งมอบงาน / ตรวจรับ</option>
+                        <option value="6. วางบิล / รอเบิกจ่ายงวด">6. วางบิล / รอเบิกจ่ายงวด</option>
+                        <option value="7. ปิดโครงการ / ค้ำประกัน">7. ปิดโครงการ / ค้ำประกัน</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-slate-400 mb-1">สถานะการเงิน / วางบิล</label>
+                      <select className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-white" value={formData.paymentStatus} onChange={e => setFormData({...formData, paymentStatus: e.target.value})}>
+                        <option value="กำลังดำเนินการหน้างาน">กำลังดำเนินการหน้างาน</option>
+                        <option value="ส่งมอบงานแล้ว รอตรวจรับ">ส่งมอบงานแล้ว รอตรวจรับ</option>
+                        <option value="วางบิลแล้ว รอเงินโอน">วางบิลแล้ว รอเงินโอน</option>
+                        <option value="ยื่นหนังสือทวงถามแล้ว">ยื่นหนังสือทวงถามแล้ว</option>
+                        <option value="รับเงินงวดเรียบร้อย">รับเงินงวดเรียบร้อย</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-slate-400 mb-1">จำนวนวันรอเงินงวด (Aging วัน)</label>
+                      <input type="number" className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-white" value={formData.agingDays} onChange={e => setFormData({...formData, agingDays: e.target.value})} />
+                    </div>
+                    <div>
+                      <label className="block text-slate-400 mb-1">📅 วันที่ตรวจรับงวดสุดท้าย (คำนวณค่า K / 2 ปี)</label>
+                      <input type="date" className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-white" value={formData.finalHandoverDate} onChange={e => setFormData({...formData, finalHandoverDate: e.target.value})} />
+                    </div>
+                    <div className="md:col-span-2">
+                      <label className="block text-slate-400 mb-1">รายละเอียด / หมายเหตุ / Defect</label>
+                      <input type="text" placeholder="ระบุรายละเอียดเพิ่มเติม..." className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-white" value={formData.defectNote} onChange={e => setFormData({...formData, defectNote: e.target.value})} />
+                    </div>
+                  </div>
+                  <button disabled={isSaving} type="submit" className="w-full bg-emerald-500 hover:bg-emerald-400 disabled:opacity-50 text-slate-950 font-bold py-2.5 rounded-xl">
+                    {isSaving ? 'กำลังบันทึกขึ้น Cloud...' : (editingId ? '💾 บันทึกการแก้ไข' : '💾 บันทึกโครงการใหม่')}
+                  </button>
+                </form>
+              )}
+
+              {activeTab === 'projects' && projects.map(p => (
+                <div key={p.id} className="bg-slate-800 border border-slate-700 rounded-2xl p-5 space-y-3">
+                  <div className="flex justify-between items-start gap-2 flex-wrap">
+                    <div>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-xs bg-blue-500/20 text-blue-300 px-2.5 py-0.5 rounded-full">{p.client}</span>
+                        <span className="text-xs bg-amber-500/20 text-amber-300 px-2.5 py-0.5 rounded-full">{p.stage}</span>
+                      </div>
+                      <h3 className="text-lg font-bold text-white mt-2">{p.name}</h3>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {currentUser.role !== 'engineer' && (
+                        <span className="text-amber-400 font-bold text-sm mr-2">{p.budget.toLocaleString()} บ.</span>
+                      )}
+                      <button onClick={() => openEditForm(p)} className="text-xs text-sky-300 hover:text-sky-200 bg-sky-500/20 px-3 py-1.5 rounded-lg font-semibold">✏️ แก้ไข</button>
+                      {currentUser.role === 'admin' && (
+                        <button onClick={() => handleDeleteProject(p.id)} className="text-xs text-red-400 hover:text-red-300 bg-red-500/10 px-2.5 py-1.5 rounded-lg">ลบ</button>
+                      )}
+                    </div>
+                  </div>
+                  <div className="bg-slate-900/60 p-3 rounded-xl border border-slate-700/50 space-y-2">
+                    <div className="flex justify-between items-center text-xs">
+                      <span className="text-slate-300 font-bold">🧪 รายการส่งทดสอบควบคุมคุณภาพ ({p.tests ? p.tests.length : 0} รายการ)</span>
+                      <button onClick={() => { setCurrentProjForTest(p); setShowTestModal(true); }} className="text-sky-400 hover:text-sky-300 font-bold">+ บันทึกผลแล็บ</button>
+                    </div>
+                    {p.tests && p.tests.length > 0 ? (
+                      <div className="space-y-2 pt-1">
+                        {p.tests.map(t => {
+                          const days = calculateDaysPassed(t.sendDate);
+                          const isDone = Boolean(t.resultDate);
+                          return (
+                            <div key={t.id} className="text-xs bg-slate-800 p-3 rounded-lg border border-slate-700 space-y-1">
+                              <div className="flex justify-between items-center">
+                                <span className="text-amber-300 font-bold text-sm">{t.testType}</span>
+                                <button onClick={() => handleDeleteTestItem(p.id, t.id)} className="text-red-400 hover:text-red-300">ลบ</button>
+                              </div>
+                              <p className="text-slate-300"><strong className="text-white">รายละเอียด:</strong> {t.specDetail}</p>
+
+                              <div className="flex flex-wrap gap-2 pt-1">
+                                {t.fieldDensityResult && <span className="bg-emerald-500/20 text-emerald-300 px-2.5 py-0.5 rounded-full font-semibold">Density: {t.fieldDensityResult}</span>}
+                                {t.slumpResult && <span className="bg-blue-500/20 text-blue-300 px-2.5 py-0.5 rounded-full font-semibold">Slump: {t.slumpResult}</span>}
+                                {t.curingDays && <span className="bg-purple-500/20 text-purple-300 px-2.5 py-0.5 rounded-full font-semibold">บ่ม: {t.curingDays} วัน</span>}
+                                {t.asphaltTemp && <span className="bg-orange-500/20 text-orange-300 px-2.5 py-0.5 rounded-full font-semibold">อุณหภูมิ: {t.asphaltTemp}</span>}
+                                {t.marshallStability && <span className="bg-pink-500/20 text-pink-300 px-2.5 py-0.5 rounded-full font-semibold">Marshall: {t.marshallStability}</span>}
+                              </div>
+
+                              <div className="text-slate-400 pt-1 border-t border-slate-700/50 flex justify-between">
+                                <span>ส่งแล็บ: {t.sendDate} {!isDone && days !== null ? <b className="text-amber-400 ml-1">⏳ รอผล ({days} วัน)</b> : ''}</span>
+                                <span className={isDone ? "text-emerald-400 font-bold" : "text-amber-400 font-bold"}>
+                                  {isDone ? `✓ ออกผลแล้ว (${t.resultDate})` : '⏳ อยู่ระหว่างทดสอบ'}
+                                </span>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <p className="text-xs text-slate-500 italic">ยังไม่มีประวัติการส่งทดสอบ</p>
+                    )}
+                  </div>
+                  <p className="text-sm text-slate-300">🛠️ หมายเหตุ: {p.defectNote}</p>
+                  <p className="text-sm text-red-400 font-bold">⏳ สถานะเงินงวด: {p.paymentStatus} (รอ {p.agingDays} วัน)</p>
+                </div>
+              ))}
+
+              {activeTab === 'testing' && projects.map(p => (
+                <div key={p.id} className="bg-slate-800 border border-slate-700 rounded-2xl p-5 space-y-4">
+                  <div className="flex justify-between items-center flex-wrap gap-2">
+                    <div>
+                      <span className="text-xs text-blue-300 bg-blue-500/20 px-2 py-0.5 rounded-full">{p.client}</span>
+                      <h3 className="text-lg font-bold text-white mt-1">{p.name}</h3>
+                    </div>
+                    <button onClick={() => { setCurrentProjForTest(p); setShowTestModal(true); }} className="bg-sky-500 hover:bg-sky-400 text-slate-950 font-bold text-xs px-3 py-2 rounded-xl">
+                      + บันทึกผลทดสอบวัสดุ (QC Control)
+                    </button>
+                  </div>
+
+                  <div className="space-y-3">
+                    {p.tests && p.tests.length > 0 ? (
+                      p.tests.map(t => {
+                        const days = calculateDaysPassed(t.sendDate);
+                        const isDone = Boolean(t.resultDate);
+                        return (
+                          <div key={t.id} className="bg-slate-900 border border-slate-700 p-4 rounded-xl space-y-2">
+                            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
+                              <div>
+                                <span className="text-sm font-bold text-amber-400 bg-amber-500/10 px-2.5 py-1 rounded border border-amber-500/20">{t.testType}</span>
+                                <span className="text-xs text-white font-semibold ml-2">({t.specDetail})</span>
+                              </div>
+                              <span className={`text-xs font-bold px-2.5 py-1 rounded ${isDone ? "bg-emerald-500/20 text-emerald-300": "bg-amber-500/20 text-amber-300"}`}>
+                                {isDone ? `ออกผลแล้ว (${t.resultDate})` : `รอผลแล็บ (${days} วัน)`}
+                              </span>
+                            </div>
+
+                            <div className="p-3 bg-slate-950 rounded-lg border border-slate-800 flex flex-wrap gap-2 text-xs">
+                              {t.fieldDensityResult && <span className="bg-emerald-500/20 text-emerald-300 px-3 py-1 rounded-md font-semibold">🎯 Field Density: {t.fieldDensityResult}</span>}
+                              {t.slumpResult && <span className="bg-blue-500/20 text-blue-300 px-3 py-1 rounded-md font-semibold">🧪 Slump: {t.slumpResult}</span>}
+                              {t.curingDays && <span className="bg-purple-500/20 text-purple-300 px-3 py-1 rounded-md font-semibold">💧 ระยะเวลาบ่มลูกปูน: {t.curingDays} วัน</span>}
+                              {t.asphaltTemp && <span className="bg-orange-500/20 text-orange-300 px-3 py-1 rounded-md font-semibold">🌡️ อุณหภูมิแอสฟัลต์: {t.asphaltTemp}</span>}
+                              {t.marshallStability && <span className="bg-pink-500/20 text-pink-300 px-3 py-1 rounded-md font-semibold">⚖️ Marshall Stability: {t.marshallStability}</span>}
+                            </div>
+
+                            <div className="flex justify-between items-center text-xs text-slate-400 pt-1">
+                              <span>ส่งทดสอบเมื่อ: <b className="text-white">{t.sendDate}</b></span>
+                              <div className="flex gap-2">
+                                <button onClick={() => openEditForm(p)} className="text-sky-400 hover:underline">แก้ไขภาพรวมโครงการ</button>
+                                <button onClick={() => handleDeleteTestItem(p.id, t.id)} className="text-red-400 hover:underline">ลบรายการ</button>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })
+                    ) : (
+                      <div className="text-center py-6 bg-slate-900/40 rounded-xl border border-dashed border-slate-700">
+                        <p className="text-sm text-slate-400">ยังไม่มีรายการทดสอบวัสดุในโครงการนี้</p>
+                        <button onClick={() => { setCurrentProjForTest(p); setShowTestModal(true); }} className="mt-2 text-xs text-sky-400 font-bold hover:underline">+ บันทึกผลทดสอบรายการแรก</button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ))}
+
+              {activeTab === 'financial' && (
+                <div className="bg-slate-800 border border-slate-700 rounded-2xl p-5 space-y-3">
+                  <h3 className="font-bold text-white">สถานะการเบิกจ่ายและ Aging รายโครงการ</h3>
+                  {projects.map(p => (
+                    <div key={p.id} className="bg-slate-900 p-3 rounded-xl flex justify-between items-center gap-2">
+                      <div>
+                        <p className="font-semibold text-sm">{p.name}</p>
+                        <p className="text-xs text-amber-300">{p.paymentStatus} — รอเงินงวดมาแล้ว <span className="font-bold text-red-400">{p.agingDays}</span> วัน</p>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <span className="font-bold text-amber-400 text-sm">
+                          {currentUser.role === 'engineer' ? '🔒 จำกัดสิทธิ์' : `${p.budget.toLocaleString()} บ.`}
+                        </span>
+                        <button onClick={() => openEditForm(p)} className="text-xs text-sky-300 bg-sky-500/20 px-2.5 py-1 rounded">แก้ไข</button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {activeTab === 'compliance' && projects.map(p => {
+                const d = calculateDeadlines(p.finalHandoverDate);
+                return (
+                  <div key={p.id} className="bg-slate-800 border border-slate-700 rounded-2xl p-5 space-y-4">
+                    <div className="flex justify-between items-center">
+                      <h3 className="font-bold text-white">{p.name}</h3>
+                      <button onClick={() => openEditForm(p)} className="text-xs text-sky-300 bg-sky-500/20 px-2.5 py-1 rounded">ใส่วันตรวจรับ</button>
+                    </div>
+                    <div className="bg-red-500/10 border border-red-500/30 p-3 rounded-xl">
+                      <span className="text-xs text-red-400 block font-semibold">⚠️ กำหนดเขตยื่นขอ "ค่า K" (ภายใน 90 วันหลังตรวจรับ)</span>
+                      <p className="text-white font-bold">{d.kFactorDeadline} {d.daysLeftK !== null ? `(เหลือเวลาอีก ${d.daysLeftK} วัน)` : '(ยังไม่ระบุวันตรวจรับงวดสุดท้าย)'}</p>
+                    </div>
+                    <div className="bg-blue-500/10 border border-blue-500/30 p-3 rounded-xl">
+                      <span className="text-xs text-blue-300 block font-semibold">🛡️ ครบกำหนดคืน "ค้ำประกันสัญญา & Retention" (2 ปี)</span>
+                      <p className="text-white font-bold">{d.warrantyDeadline}</p>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          );
+        }
+        ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+    </script>
+</body>
+</html>
